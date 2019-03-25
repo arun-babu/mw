@@ -1,28 +1,21 @@
 ==========
-Corinthian
+MW
 ==========
 
-|travis| |codacy| |license|
-
-.. |travis| image:: https://travis-ci.org/rbccps-iisc/corinthian.svg?branch=master
-    :target: https://travis-ci.org/rbccps-iisc/corinthian
-    
-.. |codacy| image:: https://api.codacy.com/project/badge/Grade/d69aaf669bb9416580118d55566dc648
-    :target: https://app.codacy.com/project/pct960/corinthian/dashboard
+|license|
 
 .. |license| image:: https://img.shields.io/badge/license-ISC-blue.svg
     :target: https://en.wikipedia.org/wiki/ISC_license#OpenBSD_license
     
-An IUDX compliant IoT middleware for smart cities
+A middleware for smart cities
 
-Documentation: https://iudx.readthedocs.io
 
 Quickstart
 ========== 
 
 #. Clone the repository::
 
-    git clone https://github.com/rbccps-iisc/corinthian
+    git clone https://github.com/arun-babu/mw
     cd corinthian
     git submodule init
     git submodule update
