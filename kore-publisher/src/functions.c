@@ -2,10 +2,12 @@
 
 extern int allow_admin_apis_from_other_hosts;
 
-void
+bool
 get_id (char *cn, char *id)
 {
 	int i, j;
+	
+	bool success = false;
 
 	// my-email@example.com (my role) 
 
@@ -36,7 +38,7 @@ parse_role:
 	if (cn[i] != '(')
 	{
 		id[0] = '\0';
-		return;
+		return false;
 	}	
 	
 	id[j++] = '/';
@@ -49,13 +51,15 @@ parse_role:
 		{
 			case ')':
 				id[j++] = '\0'; 
-				return;
+				return true;
 
 			default:
 				id[j++] = cn[i]; 
 				break;
 		}
 	}
+
+	return true;
 }
 
 void

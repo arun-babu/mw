@@ -31,7 +31,7 @@ static const char *_q[] = {
 	NULL
 };
 
-static const char *_invalid_provider_names [] = {
+static const char *_invalid_owner_names [] = {
 	"admin",
 	"guest",
 	"amq",
@@ -287,7 +287,7 @@ is_alpha_numeric (const char *str)
 }
 
 bool
-looks_like_a_valid_provider (const char *str)
+looks_like_a_valid_owner (const char *str)
 {
 	//return (str[0] >= 'a' && str[0] <= 'z' && is_alpha_numeric(str));
 	return true;
@@ -301,14 +301,14 @@ looks_like_a_valid_CN (const char *str)
 }
 
 bool
-is_provider(const char *id, const char *entity)
+is_owner(const char *id, const char *entity)
 {
 	int strlen_id = strnlen(id,MAX_LEN_OWNER_ID);
 
 	if (strncmp(id,entity,strlen_id) != 0)
 		return false;
 
-	// '/' for provider and '.' for entity
+	// '/' for owner and '.' for entity
 	if (entity[strlen_id] != '/' && entity[strlen_id] != '.')
 		return false;
 
@@ -911,7 +911,7 @@ set_autonomous(struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	if (! looks_like_a_valid_provider(id))
+	if (! looks_like_a_valid_owner(id))
 		BAD_REQUEST("id is not valid");
 
 	if (! is_string_safe(entity))
@@ -920,7 +920,7 @@ set_autonomous(struct http_request *req)
 	if (! looks_like_a_valid_entity(entity))
 		BAD_REQUEST("entity is not valid");
 
-	// either "id" should be provider of the "entity", or an "admin" 
+	// either "id" should be owner of the "entity", or an "admin" 
 	if (strcmp(id,"admin") == 0)
 	{
 		if (! is_request_from_localhost(req))
@@ -928,8 +928,8 @@ set_autonomous(struct http_request *req)
 	}
 	else
 	{
-		if (! is_provider(id,entity))
-			FORBIDDEN("you are not the provider of the entity");
+		if (! is_owner(id,entity))
+			FORBIDDEN("you are not the owner of the entity");
 	}
 
 
@@ -1127,8 +1127,8 @@ get_entities (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	// deny if the user is not a provider
-	if (! looks_like_a_valid_provider(id))
+	// deny if the user is not a owner
+	if (! looks_like_a_valid_owner(id))
 		BAD_REQUEST("id is not valid");
 
 /////////////////////////////////////////////////
@@ -1197,9 +1197,9 @@ deregister_entity (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	// deny if the id does not look like an provider
-	if (! looks_like_a_valid_provider(id))
-		BAD_REQUEST("id is not an provider");
+	// deny if the id does not look like an owner
+	if (! looks_like_a_valid_owner(id))
+		BAD_REQUEST("id is not an owner");
 
 	// deny if the user is admin 
 	if (strcmp(id,"admin") == 0)
@@ -1211,8 +1211,8 @@ deregister_entity (struct http_request *req)
 	if (! looks_like_a_valid_entity(entity))
 		BAD_REQUEST("entity is not valid");
 
-	if (! is_provider(id,entity))
-		FORBIDDEN("you are not the provider of the entity");
+	if (! is_owner(id,entity))
+		FORBIDDEN("you are not the owner of the entity");
 
 /////////////////////////////////////////////////
 
@@ -1545,7 +1545,7 @@ done:
 }
 
 int
-register_provider(struct http_request *req)
+register_owner(struct http_request *req)
 {
 	int i, j;
 
@@ -1564,26 +1564,27 @@ register_provider(struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	char provider [X509_CN_LENGTH + 1]; 
+	char owner [X509_CN_LENGTH + 1]; 
 
-	get_id (cn,provider);
+	if (! get_id (cn,owner))
+		FORBIDDEN("unauthorized");
 
 
-	// conflict if provider already exist
+	// conflict if owner already exist
 	CREATE_STRING (query,
 			"SELECT id FROM users WHERE id ='%s'",
-				provider	
+				owner	
 	);
-	RUN_QUERY (query,"could not query info about the provider");
+	RUN_QUERY (query,"could not query info about the owner");
 
 	if(kore_pgsql_ntuples(&sql) > 0)
-		CONFLICT("provider already registered");
+		CONFLICT("owner already registered");
 
-	if (0 == pthread_create(&thread,NULL,create_exchanges_and_queues,(void *)provider))
+	if (0 == pthread_create(&thread,NULL,create_exchanges_and_queues,(void *)owner))
 		thread_started = true;
 	else
 	{
-		create_exchanges_and_queues((void *)provider);
+		create_exchanges_and_queues((void *)owner);
 
 		if (! is_success)
 			ERROR("could not create exchanges and queues");
@@ -1592,10 +1593,10 @@ register_provider(struct http_request *req)
 	CREATE_STRING (query,
 		"INSERT INTO users (id,schema,blocked,is_autonomous) "
 			"VALUES('%s',NULL,'f','t')",
-			provider
+			owner
 	);
 
-	RUN_QUERY (query, "could not create a new provider");
+	RUN_QUERY (query, "could not create a new owner");
 
 	kore_buf_reset(response);
 
@@ -1619,7 +1620,7 @@ done:
 }
 
 int
-get_providers(struct http_request *req)
+get_owners(struct http_request *req)
 {
 	int i;
 
@@ -1657,13 +1658,13 @@ get_providers(struct http_request *req)
 
 	for (i = 0; i < num_rows; ++i)
 	{
-		char *provider		= kore_pgsql_getvalue(&sql,i,0);
+		char *owner		= kore_pgsql_getvalue(&sql,i,0);
 		char *is_blocked	= kore_pgsql_getvalue(&sql,i,1);
 
 		kore_buf_appendf (
 			response,
 				"\"%s\":%s,",
-					provider,	
+					owner,	
 					is_blocked [0] == 't' ? "1" : "0"
 		);
 	}
@@ -1683,13 +1684,13 @@ done:
 }
 
 int
-deregister_provider(struct http_request *req)
+deregister_owner(struct http_request *req)
 {
 	int i, num_rows;
 
 	const char *id;
 	const char *apikey;
-	const char *provider;
+	const char *owner;
 
 	pthread_t thread;
 	bool thread_started = false; 
@@ -1705,7 +1706,7 @@ deregister_provider(struct http_request *req)
 				||
 		! http_request_header(req, "apikey", &apikey)
 				||
-		! http_request_header(req, "provider", &provider)
+		! http_request_header(req, "owner", &owner)
 			,
 		"inputs missing in headers"
 	);
@@ -1713,30 +1714,30 @@ deregister_provider(struct http_request *req)
 	if (strcmp(id,"admin") != 0)
 		FORBIDDEN("only admin can call this API");
 
-	for (i = 0; _invalid_provider_names[i]; ++i)
+	for (i = 0; _invalid_owner_names[i]; ++i)
 	{
-		if (strcmp(provider,_invalid_provider_names[i]) == 0)
-			BAD_REQUEST("cannot delete provider");
+		if (strcmp(owner,_invalid_owner_names[i]) == 0)
+			BAD_REQUEST("cannot delete owner");
 	}
 
-	// it should look like an provider
-	if (! looks_like_a_valid_provider(provider))
-		BAD_REQUEST("invalid provider");
+	// it should look like an owner
+	if (! looks_like_a_valid_owner(owner))
+		BAD_REQUEST("invalid owner");
 
 /////////////////////////////////////////////////
 
-	if (! is_string_safe(provider))
-		BAD_REQUEST("invalid provider");
+	if (! is_string_safe(owner))
+		BAD_REQUEST("invalid owner");
 
 /////////////////////////////////////////////////
 
 	CREATE_STRING (query,
 			"SELECT id FROM users where id = '%s' or id like '%s/%%'",
-				provider,
-				provider
+				owner,
+				owner
 	);
 
-	RUN_QUERY (query,"could not get app/devices associated with provider");
+	RUN_QUERY (query,"could not get app/devices associated with owner");
 
 	num_rows = kore_pgsql_ntuples(&sql);
 
@@ -1748,11 +1749,11 @@ deregister_provider(struct http_request *req)
 	}
 
 	// delete entries in to RabbitMQ
-	if (0 == pthread_create(&thread,NULL,delete_exchanges_and_queues,(void *)provider))
+	if (0 == pthread_create(&thread,NULL,delete_exchanges_and_queues,(void *)owner))
 		thread_started = true;
 	else
 	{
-		delete_exchanges_and_queues((void *)provider);
+		delete_exchanges_and_queues((void *)owner);
 
 		if (! is_success)
 			ERROR("could not delete exchanges and queues");
@@ -1761,25 +1762,25 @@ deregister_provider(struct http_request *req)
 	// delete from acl
 	CREATE_STRING (query,
 		"DELETE FROM acl WHERE from_id LIKE '%s/%%' OR exchange LIKE '%s/%%'",
-			provider,
-			provider
+			owner,
+			owner
 	);
 
 	RUN_QUERY (query,"could not delete from acl table");
 
-	// delete all apps and devices of the provider
+	// delete all apps and devices of the owner
 	CREATE_STRING (query,
 		"DELETE FROM users WHERE id LIKE '%s/%%'",
-			provider
+			owner
 	);
-	RUN_QUERY (query,"could not delete apps/devices of the provider");
+	RUN_QUERY (query,"could not delete apps/devices of the owner");
 
-	// finally delete the provider 
+	// finally delete the owner 
 	CREATE_STRING (query,
 			"DELETE FROM users WHERE id = '%s'",
-				provider
+				owner
 	);
-	RUN_QUERY (query,"could not delete the provider");
+	RUN_QUERY (query,"could not delete the owner");
 
 	OK();
 
@@ -1834,7 +1835,7 @@ queue_bind (struct http_request *req)
 			"message-type = %s\n",
 				id, apikey, to, topic, message_type);
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		if (! http_request_header(req, "from", &from))
 			BAD_REQUEST("'from' value missing in header");
@@ -1842,9 +1843,9 @@ queue_bind (struct http_request *req)
 		if (! looks_like_a_valid_entity(from))
 			BAD_REQUEST("'from' is not a valid entity");
 
-		// check if the he is the provider of from 
-		if (! is_provider(id,from))
-			FORBIDDEN("you are not the provider of 'from' entity");
+		// check if the he is the owner of from 
+		if (! is_owner(id,from))
+			FORBIDDEN("you are not the owner of 'from' entity");
 	}
 	else
 	{
@@ -1867,9 +1868,9 @@ queue_bind (struct http_request *req)
 
 	if(strcmp(message_type,"private") == 0)
 	{
-		if (! is_provider(id,to))
+		if (! is_owner(id,to))
 		{
-			FORBIDDEN("you are not the provider of 'to'");
+			FORBIDDEN("you are not the owner of 'to'");
 		}
 	}
 
@@ -1906,10 +1907,10 @@ queue_bind (struct http_request *req)
 	debug_printf("exchange = %s\n", exchange);
 
 	// For all non public messages
-	// if he is not the provider, he needs an entry in acl
+	// if he is not the owner, he needs an entry in acl
 	if(strcmp(message_type,"public") != 0)
 	{
-		if (! is_provider(id,to))
+		if (! is_owner(id,to))
 		{ 
 			CREATE_STRING (
 				query,
@@ -1996,7 +1997,7 @@ queue_unbind (struct http_request *req)
 		"inputs missing in headers"
 	);
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		if (! http_request_header(req, "from", &from))
 			BAD_REQUEST("'from' value missing in header");
@@ -2004,9 +2005,9 @@ queue_unbind (struct http_request *req)
 		if (! looks_like_a_valid_entity(from))
 			BAD_REQUEST("'from' is not a valid entity");
 
-		// check if the he is the provider of from 
-		if (! is_provider(id,from))
-			FORBIDDEN("you are not the provider of 'from' entity");
+		// check if the he is the owner of from 
+		if (! is_owner(id,from))
+			FORBIDDEN("you are not the owner of 'from' entity");
 	}
 	else
 	{
@@ -2029,9 +2030,9 @@ queue_unbind (struct http_request *req)
 
 	if(strcmp(message_type,"private") == 0)
 	{
-		if (! is_provider(id,to))
+		if (! is_owner(id,to))
 		{
-			FORBIDDEN("you are not the provider of 'to'");
+			FORBIDDEN("you are not the owner of 'to'");
 		}
 	}
 
@@ -2069,8 +2070,8 @@ queue_unbind (struct http_request *req)
 
 	if(strcmp(message_type,"public") != 0)
 	{
-	    // if he is not the provider, he needs an entry in acl
-	    if(! is_provider(id,to))
+	    // if he is not the owner, he needs an entry in acl
+	    if(! is_owner(id,to))
 	    {
 		    CREATE_STRING (
 			    query,
@@ -2172,7 +2173,7 @@ follow (struct http_request *req)
 		"invalid message-type"
 	);
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		if (! http_request_header(req, "from", &from))
 			BAD_REQUEST("'from' value missing in header");
@@ -2180,9 +2181,9 @@ follow (struct http_request *req)
 		if (! looks_like_a_valid_entity(from))
 			BAD_REQUEST("'from' is not a valid entity");
 
-		// check if the he is the provider of from 
-		if (! is_provider(id,from))
-			FORBIDDEN("you are not the provider of 'from' entity");
+		// check if the he is the owner of from 
+		if (! is_owner(id,from))
+			FORBIDDEN("you are not the owner of 'from' entity");
 	}
 	else
 	{
@@ -2215,7 +2216,7 @@ follow (struct http_request *req)
 /////////////////////////////////////////////////
 
 	// if both from and to are owned by id
-	if (is_provider(id,to))
+	if (is_owner(id,to))
 		status = "approved";
 
 	int int_validity = strtonum(validity,1,10000,NULL);
@@ -2363,7 +2364,7 @@ follow (struct http_request *req)
 		);
 
 		/* we have sent the request,
-		   but the provider of the "to" device/app must approve */
+		   but the owner of the "to" device/app must approve */
 		req->status = 202;
 	}
 
@@ -2408,7 +2409,7 @@ unfollow (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		CREATE_STRING (query,
 			"SELECT "
@@ -2607,7 +2608,7 @@ share (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		CREATE_STRING (query, 
 			"SELECT from_id,exchange,validity,topic FROM follow "
@@ -2812,7 +2813,7 @@ reject_follow (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		CREATE_STRING (query, 
 			"SELECT from_id FROM follow "
@@ -2879,7 +2880,7 @@ get_follow_status (struct http_request *req)
 
 //////////////////////////////////////////////////
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		CREATE_STRING (query,
 			"SELECT "
@@ -2972,7 +2973,7 @@ get_follow_requests (struct http_request *req)
 
 /////////////////////////////////////////////////
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		CREATE_STRING (query,
 			"SELECT "
@@ -3050,18 +3051,18 @@ block (struct http_request *req)
 		"inputs missing in headers"
 	);
 
-	if (! looks_like_a_valid_provider(id))
-		BAD_REQUEST("id is not valid provider");
+	if (! looks_like_a_valid_owner(id))
+		BAD_REQUEST("id is not valid owner");
 
 	if (strcmp(id,"admin") == 0)
 	{
 		if (! is_request_from_localhost(req))
 			FORBIDDEN("admin can only call APIs from localhost");
 
-		if (! http_request_header(req, "provider", &entity_to_be_blocked))
+		if (! http_request_header(req, "owner", &entity_to_be_blocked))
 		{
 			if (! http_request_header(req, "entity", &entity_to_be_blocked))
-				BAD_REQUEST("provider/entity field missing in header");
+				BAD_REQUEST("owner/entity field missing in header");
 		}
 	}
 	else
@@ -3072,8 +3073,8 @@ block (struct http_request *req)
 		if (! looks_like_a_valid_entity(entity_to_be_blocked))
 			BAD_REQUEST("entity is not valid");
 
-		if (! is_provider(id,entity_to_be_blocked))
-			FORBIDDEN("you are not the provider of the entity");
+		if (! is_owner(id,entity_to_be_blocked))
+			FORBIDDEN("you are not the owner of the entity");
 	}
 
 /////////////////////////////////////////////////
@@ -3091,10 +3092,10 @@ block (struct http_request *req)
 				entity_to_be_blocked
 	);
 
-	RUN_QUERY(query, "could not query the provider/entity");
+	RUN_QUERY(query, "could not query the owner/entity");
 
 	if (kore_pgsql_ntuples(&sql) != 1)
-		BAD_REQUEST("invalid provider/entity");
+		BAD_REQUEST("invalid owner/entity");
 
 	CREATE_STRING(query,
 			"UPDATE users set blocked='t' WHERE id='%s'",
@@ -3125,18 +3126,18 @@ unblock (struct http_request *req)
 		"inputs missing in headers"
 	);
 
-	if (! looks_like_a_valid_provider(id))
-		BAD_REQUEST("id is not valid provider");
+	if (! looks_like_a_valid_owner(id))
+		BAD_REQUEST("id is not valid owner");
 
 	if (strcmp(id,"admin") == 0)
 	{
 		if (! is_request_from_localhost(req))
 			FORBIDDEN("admin can only call APIs from localhost");
 
-		if (! http_request_header(req, "provider", &entity_to_be_unblocked))
+		if (! http_request_header(req, "owner", &entity_to_be_unblocked))
 		{
 			if (! http_request_header(req, "entity", &entity_to_be_unblocked))
-				BAD_REQUEST("provider/entity field missing in header");
+				BAD_REQUEST("owner/entity field missing in header");
 		}
 	}
 	else
@@ -3147,8 +3148,8 @@ unblock (struct http_request *req)
 		if (! looks_like_a_valid_entity(entity_to_be_unblocked))
 			BAD_REQUEST("invalid entity");
 
-		if (! is_provider(id,entity_to_be_unblocked))
-			FORBIDDEN("you are not the provider of the entity");
+		if (! is_owner(id,entity_to_be_unblocked))
+			FORBIDDEN("you are not the owner of the entity");
 	}
 
 /////////////////////////////////////////////////
@@ -3163,10 +3164,10 @@ unblock (struct http_request *req)
 				entity_to_be_unblocked
 	);
 
-	RUN_QUERY(query, "could not query the provider/entity");
+	RUN_QUERY(query, "could not query the owner/entity");
 
 	if (kore_pgsql_ntuples(&sql) != 1)
-		BAD_REQUEST("invalid provider/entity");
+		BAD_REQUEST("invalid owner/entity");
 
 	CREATE_STRING(query,
 			"UPDATE users set blocked='f' WHERE id='%s'",
@@ -3199,13 +3200,13 @@ permissions (struct http_request *req)
 		"inputs missing in headers"
 	)
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		if (! http_request_header(req, "entity", &entity))
 			BAD_REQUEST("entity value not specified in header");
 			
-		if (! is_provider(id,entity))
-			FORBIDDEN("you are not the provider of entity");
+		if (! is_owner(id,entity))
+			FORBIDDEN("you are not the owner of entity");
 	}
 	else
 	{
@@ -3268,12 +3269,12 @@ create_exchanges_and_queues (void *v)
 
 	is_success = false;
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		// create notification exchange 
 		snprintf(my_exchange, 1 + MAX_LEN_RESOURCE_ID,"%s.notification",id);
 
-		debug_printf("[provider] creating exchange {%s}\n",my_exchange);
+		debug_printf("[owner] creating exchange {%s}\n",my_exchange);
 
 		amqp_exchange_declare (
 				admin_connection,
@@ -3291,15 +3292,15 @@ create_exchanges_and_queues (void *v)
 
 		if (my_r.reply_type != AMQP_RESPONSE_NORMAL)
 		{
-			fprintf(stderr,"[provider] amqp_exchange_declare failed {%s}\n",my_exchange);
+			fprintf(stderr,"[owner] amqp_exchange_declare failed {%s}\n",my_exchange);
 			goto done;
 		}
 
-		debug_printf("[provider] done creating exchange {%s}\n",my_exchange);
+		debug_printf("[owner] done creating exchange {%s}\n",my_exchange);
 
 		// create notification queue
 		snprintf(my_queue, 1 + MAX_LEN_RESOURCE_ID,"%s.notification",id);
-		debug_printf("[provider] creating queue {%s}\n",my_queue);
+		debug_printf("[owner] creating queue {%s}\n",my_queue);
 
 		amqp_queue_declare (
 				admin_connection,
@@ -3316,7 +3317,7 @@ create_exchanges_and_queues (void *v)
 
 		if (my_r.reply_type != AMQP_RESPONSE_NORMAL)
 		{
-			fprintf(stderr,"[provider] amqp_queue_declare failed {%s}\n",my_queue);
+			fprintf(stderr,"[owner] amqp_queue_declare failed {%s}\n",my_queue);
 			goto done;
 		}
 
@@ -3486,12 +3487,12 @@ delete_exchanges_and_queues (void *v)
 
 	is_success = false;
 
-	if (looks_like_a_valid_provider(id))
+	if (looks_like_a_valid_owner(id))
 	{
 		// delete notification exchange 
 		snprintf(my_exchange, 1 + MAX_LEN_RESOURCE_ID,"%s.notification",id);
 
-		debug_printf("[provider] deleting exchange {%s}\n",my_exchange);
+		debug_printf("[owner] deleting exchange {%s}\n",my_exchange);
 
 		if (! amqp_exchange_delete (
 			admin_connection,
@@ -3509,11 +3510,11 @@ delete_exchanges_and_queues (void *v)
 			}
 		}
 
-		debug_printf("[provider] done deleting exchange {%s}\n",my_exchange);
+		debug_printf("[owner] done deleting exchange {%s}\n",my_exchange);
 
 		// delete notification queue
 		snprintf(my_queue, 1 + MAX_LEN_RESOURCE_ID,"%s.notification",id);
-		debug_printf("[provider] deleting queue {%s}\n",my_queue);
+		debug_printf("[owner] deleting queue {%s}\n",my_queue);
 
 		if (! amqp_queue_delete (
 			admin_connection,
@@ -3532,7 +3533,7 @@ delete_exchanges_and_queues (void *v)
 			}
 		}
 
-		debug_printf("[provider] DONE deleting queue {%s}\n",my_queue);
+		debug_printf("[owner] DONE deleting queue {%s}\n",my_queue);
 	}
 	else
 	{
