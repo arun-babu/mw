@@ -64,9 +64,6 @@ int serve_websocket (struct http_request *req)
 
 	bool is_autonomous = false;
 
-	if (! login_success(id,apikey,&is_autonomous))
-		FORBIDDEN("invalid id or apikey");
-
 	// todo ok ?
 	req->hdlr_extra = kore_strdup("success");
 

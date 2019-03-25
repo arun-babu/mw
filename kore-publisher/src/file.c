@@ -45,9 +45,6 @@ int upload_file (struct http_request *req)
 
 	bool is_autonomous = false;
 
-	if (! login_success(id,apikey,&is_autonomous))
-		FORBIDDEN("invalid id or apikey");
-
 	if (! is_string_safe(file_name))
 		BAD_REQUEST("invalid file name");
 
@@ -132,9 +129,6 @@ int download_file (struct http_request *req)
 
 	bool is_autonomous = false;
 
-	if (! login_success(id,apikey,&is_autonomous))
-		FORBIDDEN("invalid id or apikey");
-
 	if (! is_string_safe(file_name))
 		BAD_REQUEST("invalid file name");
 
@@ -172,9 +166,6 @@ int delete_file (struct http_request *req)
 /////////////////////////////////////////////////
 
 	bool is_autonomous = false;
-
-	if (! login_success(id,apikey,&is_autonomous))
-		FORBIDDEN("invalid id or apikey");
 
 	if (! is_string_safe(file_name))
 		BAD_REQUEST("invalid file name");

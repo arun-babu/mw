@@ -121,9 +121,6 @@ int init 			(int);
 int async_init 			(char *);
 void init_admin_connection 	(void);
 
-bool login_success 		(const char *, const char *, bool *);
-
-void gen_salt_password_and_apikey (const char *, char *, char *, char *);
 bool check_acl 			  (const char *, const char *, const char *);
 
 bool looks_like_a_valid_owner		(const char *str);
