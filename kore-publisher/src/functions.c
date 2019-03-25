@@ -3,6 +3,62 @@
 extern int allow_admin_apis_from_other_hosts;
 
 void
+get_id (char *cn, char *id)
+{
+	int i, j;
+
+	// my-email@example.com (my role) 
+
+	for (i = 0; i < X509_CN_LENGTH && cn[i]; ++i)
+	{
+		switch (cn[i])
+		{
+			case '@':
+				id[i] = '/';
+				break;
+
+			case ' ':
+				id[i] = '\0';
+				goto parse_role;
+				break;
+			
+			default:
+				id[i] = cn[i];
+		}
+	}
+
+parse_role:
+
+	j = i;
+
+	++i;
+	
+	if (cn[i] != '(')
+	{
+		id[0] = '\0';
+		return;
+	}	
+	
+	id[j++] = '/';
+
+	++i;
+
+	for (; i < X509_CN_LENGTH && cn[i]; ++i)
+	{
+		switch (cn[i])
+		{
+			case ')':
+				id[j++] = '\0'; 
+				return;
+
+			default:
+				id[j++] = cn[i]; 
+				break;
+		}
+	}
+}
+
+void
 string_to_lower (const char *str)
 {
 	char *p = (char *)str;
