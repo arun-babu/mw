@@ -1,9 +1,12 @@
 #include "kore-publisher.h"
 #include "assets.h"
 
-#define X509_CN_LENGTH (64)
+#include <openssl/x509.h>
 
-char cn[X509_CN_LENGTH + 1];
+#define X509_DN_LENGTH (2049)
+
+char subject_name	[X509_DN_LENGTH];
+char masked_subject_name[X509_DN_LENGTH];
 
 struct kore_pgsql sql;
 
@@ -59,10 +62,8 @@ init (int state)
 	return KORE_RESULT_OK;
 }
 
-bool
-looks_like_a_valid_CN (const char *str)
+looks_like_a_valid_subject_name(const char *str)
 {
-	// should not contain '/'
 	return true;
 }
 
@@ -312,7 +313,7 @@ get_catalog (struct http_request *req)
 	kore_buf_append(response,"{",1);
 
 	CREATE_STRING (query,
-		"SELECT masked_id,schema FROM users WHERE schema IS NOT NULL ORDER BY id"
+		"SELECT id,schema FROM users WHERE schema IS NOT NULL ORDER BY id"
 	);
 
 	RUN_QUERY (query,"unable to query catalog data");
@@ -375,26 +376,32 @@ post_catalog (struct http_request *req)
 	if (! is_json_safe(body))
 		BAD_REQUEST("bad json input");
 
-	if (X509_GET_CN(req->owner->cert, cn, sizeof(cn)) == -1)
-		FORBIDDEN("No CN found in the certificate");
+	X509_NAME_oneline (X509_get_subject_name(req->owner->cert), subject_name, sizeof(subject_name));
 
 /////////////////////////////////////////////////
 
-	if (! looks_like_a_valid_CN(cn))
-		BAD_REQUEST("invalid CN in certificate");
+	//if (! looks_like_a_valid_subject_name(subject_name))
+	//	BAD_REQUEST("invalid subject name in the certificate");
 
 /////////////////////////////////////////////////
 
-	printf("Starting ...\n");
+	printf("Starting ... {%s}\n",subject_name);
 	CREATE_STRING (query,
 		"INSERT INTO users(id,masked_id,schema) "
-		"VALUES('%s/%s',concat(encode(digest(split_part('%s','@',1),'sha1'),'hex'),'@',split_part('%s','@',2),'/','%s'),$1)",
-				// $1 is the schema (in body) 
-		cn,
+		"VALUES('%s%s',"
+		"concat("
+			"'%s/',"
+			"split_part('%s','/emailAddress=',1),"
+			"'/maskedEmailAddress=',"
+			"encode(digest(split_part(split_part('%s','/emailAddress=',2),'@',1),'sha1'),'hex'),'@',split_part('%s','@',2)"
+		")"
+		",$1)", 	// $1 is the schema (in body) 
+
 		entity,
-		cn,
-		cn,
-		entity
+		subject_name,
+		entity,
+		subject_name,
+		subject_name
 	);
 
 	printf("[%d] Error in query {%s}\n",__LINE__,query->data);
@@ -455,19 +462,16 @@ delete_catalog (struct http_request *req)
 	if (! is_string_safe(entity))
 		BAD_REQUEST("invalid entity");
 
-	if (X509_GET_CN(req->owner->cert, cn, sizeof(cn)) == -1)
-		FORBIDDEN("No CN found in the certificate");
-
 /////////////////////////////////////////////////
 
-	if (! looks_like_a_valid_CN(cn))
-		BAD_REQUEST("invalid CN in certificate");
+	if (! looks_like_a_valid_subject_name(subject_name))
+		BAD_REQUEST("invalid subject name in certificate");
 
 /////////////////////////////////////////////////
 
 	CREATE_STRING (query,
 		"DELETE FROM users WHERE id ='%s/%s'",
-		cn,
+		subject_name,
 		entity
 	);
 
